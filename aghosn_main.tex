@@ -114,7 +114,7 @@ Finally, Section[REF] lists future work before the conclusion in Section[REF].
 %Computer scientists have made several attempts at providing a memory isolation abstraction within a single thread of execution.
 There exists several implementations claiming to provide a memory isolation abstraction within a thread of execution.
 %We observed two distinct techniques to provide this abstraction: sandboxes that isolate different user memory regions, and kernel level implementations.
-We divide these implementations into two distrinct categories: user-level applications and kernel level implementations.
+We divide these implementations into two distinct categories: user-level applications and kernel level implementations.
 In this section, we describe general techniques used by user-level applications solutions, and explain why we believe that this abstraction has to be provided as a kernel primitive.
 %In this section, we briefly describe one sandbox solution, and explain why we believe that this abstraction has to be provided as a kernel primitive.
 We then proceed with existing kernel level implementations, and expose what we consider to be important limitations that prevent them from being a stable long-term solution.\\
@@ -140,11 +140,22 @@ NaCl's solution can be seen as a software implementation of memory segmentation.
 %All other memory accesses are re-written to be expressed using these guarded registers.
 %NaCl can therefore ensure that every memory operation falls into the proper address range and no untrusted application can access another's resources.
 NaCl authors claim that control-flow and memory integrity are insured with an average overhead of less than 7\% on x86-64.
-While these performances are remarkable for a solution based on code instrumentation, we believe that the recompilation step required to perform the binary translation, as well as the introduction of pseudo-instructions are a burden that could be avoided if hardware support for memory isolation was used.
-As it is the kernel's role to provide resource management and isolation, we argue that this abstraction should be provided as a collection of system calls.\\
+While these performances are remarkable for a solution based on code instrumentation, we believe that the recompilation step required to perform the binary translation, as well as the introduction of pseudo-instructions are a burden.
+Moreover, software is always subjugated to bugs, unexplored execution, and exploits.
+We can thus consider it less reliable than solutions relying on hardware features to enforce memory isolation.
+As it is the kernel's role to provide resource management and isolation, we argue that this abstraction should be provided as a collection of system calls relying on safe and efficient hardware features for memory isolation. \\
+%less reliable than hardware, and find CVS exploits or something?
 
+%Hummmm.... find the proper way to get there.
+Containers take a higher-level approach, compared to standard hypervisors, by providing an \emph{OS} rather than a \emph{machine} abstraction.
+Protected portions of the operating system are made available to containers, while allowing them to have their own abstractions for processes and other operating system components.
+The container approach relies on the possibility to execute in separated spaces that isolate them from each others, as well as from the host OS.
+More precisely, Docker containers[REF] rely on Linux LXC to provide separated namespaces and isolate containers, while control groups are used to implement resource limiting and auditing.
 
-Containers 
+While presenting an interesting approach with many use-cases in devOps, containers suffer from the same security issues as previously discussed user level applications.
+The isolation among containers is entirely enforced by the Linux namespace mechanism, i.e., an oversized piece of software that might contain bugs and is hence less reliable than hardware based solutions.
+More importantly, the popularity of Docker-like solutions spread interest to their supporting technologies, sprouting updates and extensions, each of them potentially introducing new< security vulnerabilities.\\
+
 
 Kernels are at the core of operating systems and are responsible for managing resources, among which the memory.
 As such, they are a perfect environment to implement and expose new abstractions for memory isolation within a process.
