@@ -59,8 +59,10 @@ Second Institution
 %and leave process etc for introduction.
 
 We believe programmers would greatly benefit from an OS abstraction for memory isolation within a process.
-We further argue that relying on Dune and hardware support for virtualization would, unlike previous attempts, yield a maintainable solution.
-Dune provides flexibility, compatibility with the Linux kernel, and access to hardware features required to implement such an abstraction.
+We further argue that leveraging recent architecture's hardware support for virtualizaiton would, unlike previous attempts, yield a solution that is both safe and maintainable.
+Hardware support for virtualization provides direct access to hardware features, such as ring protection mechanism and page tables, required to provide such an abstraction, while providing flexibility in terms of the implementation's specifics.
+%We further argue that relying on Dune and hardware support for virtualization would, unlike previous attempts, yield a maintainable solution.
+%Dune provides flexibility, compatibility with the Linux kernel, and access to hardware features required to implement such an abstraction.
 We improve upon previous solutions by both relying on hardware mechanisms to enforce memory isolation and being completely decoupled from an existing kernel.
 
 \section{Introduction}
@@ -220,8 +222,8 @@ Using hardware support for virtualization, we therefore have an environment that
 
 While a certain form of hypervisor is still needed to interface the guest and host environments, we argue that hardware support for virtualization, as much as our own limited requirements, enable to reduce the hypervisor functionalities and complexity.
 By design, a hypervisor with a narrow set of features is less amenable to exploits than a standard one.
-Any hypervisor can be reduced to its core: the exposed functionalities, and its management of resources.
-Where standard hypervisors such as[CITE] accumulate features and functionalities, emulating a complete operating system, we believe that our needs, in order to provide memory isolation within a thread of execution can be strip down to a bare minimum consisting of an execution unit and some memory.
+Any hypervisor reduced to its core has two roles: expose functionalities, and manage a set of resources.
+Where standard hypervisors such as[CITE] accumulate features and functionalities, emulating a complete operating system, we believe that our needs, in order to provide memory isolation within a thread of execution can be stripped down to a bare minimum consisting of an execution unit and some memory.
 Our hypervisor will therefore be solely in charge of exposing a certain amount of memory resources, i.e., virtualizing memory resources.
 All other functionalities are implemented within the guest, by relying on direct access to hardware features and privileged state. \\
 
