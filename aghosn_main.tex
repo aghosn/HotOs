@@ -111,24 +111,40 @@ Finally, Section[REF] lists future work before the conclusion in Section[REF].
 %Either sandbox, but bad because have to work at the machine abstraction, complicated + perfs.
 %NaCl with recompilation etc. and there own environment + compiler.
 %Either as part of existing kernel, maintainability issues.\\
-Computer scientists have made several attempts at providing a memory isolation abstraction within a single thread of execution.
-We observed two distinct techniques to provide this abstraction: sandboxes that isolate different user memory regions, and kernel level implementations.
-In this section, we briefly describe one sandbox solution, and explain why we believe that this abstraction has to be provided as a kernel primitive.
+%Computer scientists have made several attempts at providing a memory isolation abstraction within a single thread of execution.
+There exists several implementations claiming to provide a memory isolation abstraction within a thread of execution.
+%We observed two distinct techniques to provide this abstraction: sandboxes that isolate different user memory regions, and kernel level implementations.
+We divide these implementations into two distrinct categories: user-level applications and kernel level implementations.
+In this section, we describe general techniques used by user-level applications solutions, and explain why we believe that this abstraction has to be provided as a kernel primitive.
+%In this section, we briefly describe one sandbox solution, and explain why we believe that this abstraction has to be provided as a kernel primitive.
 We then proceed with existing kernel level implementations, and expose what we consider to be important limitations that prevent them from being a stable long-term solution.\\
 
-A sandbox is a security mechanism that allows to isolate untrusted code execution and prevent it from harming both the underlying system and other sandboxed applications.
-A common requirement for sandboxes is to enforce memory isolation and reduce the capabilities of running applications.
-As a result, sandboxes often have to intervene in the management of resources.
-They hence duplicate the kernel's functionalities in order to obtain fine-grained control over memory allocation and accesses.
-Google's NaCl[REF] provides a sandboxed environment to execute untrusted native plugins in a Web browser.
-In NaCl, memory isolation is ensured using code instrumentation.
-The untrusted application's code is recompiled and instrumented such that instructions that access and modify memory related registers are replaced by guarded pseudo instructions, hence insuring that the registers content are consistent throughout the execution.
-All other memory accesses are re-written to be expressed using these guarded registers.
-NaCl can therefore ensure that every memory operation falls into the proper address range and no untrusted application can access another's resources.
+Virtual machines, hypervisors, and sandboxes implemented as user level applications share common techniques to provide security mechanisms that allow to isolate untrusted code execution and prevent it from harming both the underlying system and other isolated applications.
+A common security and isolation requirement in such applications is to enforce memory isolation and reduce the capabilities of running applications.
+As a result, such applications have to duplicate the kernel's functionalities in order to obtain fine-grained control over memory allocation and access, and hence intervene in the management of resources.
+On older architectures, applications such as NaCl[REF] or Vx32[REF] could rely on user access to hardware support for memory segmentation to enforce memory isolation within a thread of execution.
+With the advent of modern x86-64 architectures and more generally the progressive disappearance of hardware memory segmentation support, user applications had to use new techniques.
+User level solutions include software fault isolation, code instrumentation, instruction emulation, and binary code translation.
+More generally, all these software based solutions rely on some mixture of code instrumentation and software checks to enforce memory isolation.
+NaCl[REF], for example, was modified to replace hardware segmentation with code instrumentation.
+The untrusted application's code is recompiled and instrumented such that instructions that access and modify memory related registers are replaced by guarded pseudo-instructions, hence insuring that their contents are consistent throughout the execution.
+It further replaces all memory accesses and re-writes them in terms of the guarded registers, hence insuring that every memory operation falls into the proper address range and no untrusted application can access another's resources.
+NaCl's solution can be seen as a software implementation of memory segmentation.
+%A sandbox is a security mechanism that allows to isolate untrusted code execution and prevent it from harming both the underlying system and other sandboxed applications.
+%A common requirement for sandboxes is to enforce memory isolation and reduce the capabilities of running applications.
+%As a result, sandboxes often have to intervene in the management of resources.
+%They hence duplicate the kernel's functionalities in order to obtain fine-grained control over memory allocation and accesses.
+%Google's NaCl[REF] provides a sandboxed environment to execute untrusted native plugins in a Web browser.
+%In NaCl, memory isolation is ensured using code instrumentation.
+%The untrusted application's code is recompiled and instrumented such that instructions that access and modify %memory related registers are replaced by guarded pseudo instructions, hence insuring that the registers conten%t %are consistent throughout the execution.
+%All other memory accesses are re-written to be expressed using these guarded registers.
+%NaCl can therefore ensure that every memory operation falls into the proper address range and no untrusted application can access another's resources.
 NaCl authors claim that control-flow and memory integrity are insured with an average overhead of less than 7\% on x86-64.
 While these performances are remarkable for a solution based on code instrumentation, we believe that the recompilation step required to perform the binary translation, as well as the introduction of pseudo-instructions are a burden that could be avoided if hardware support for memory isolation was used.
 As it is the kernel's role to provide resource management and isolation, we argue that this abstraction should be provided as a collection of system calls.\\
 
+
+Containers 
 
 Kernels are at the core of operating systems and are responsible for managing resources, among which the memory.
 As such, they are a perfect environment to implement and expose new abstractions for memory isolation within a process.
@@ -206,6 +222,7 @@ Moreover, our solution does not require to modify an existing kernel.
 %Want to work at the proper level of abstraction: the process. Don't want to manage processes etc.
 %With hardware virtu support, that's made possible => work within a host process. Virtu preserves the process interface and enforces isolation between host and guest. strip down to bare minimum of what's needed.
 %Shield the host from the guest.
+%TODO: really need two things: flexiblity/indep from existing kernel and access to hardware
 Intel and AMD identified and answered the need for virtualization hardware support.
 The Intel solution, called VT-x, is a virtualization extension to the x86 ISA.
 AMD provides a similar extension with SVM[REF].
@@ -223,18 +240,10 @@ Using hardware support for virtualization, we therefore have an environment that
 While a certain form of hypervisor is still needed to interface the guest and host environments, we argue that hardware support for virtualization, as much as our own limited requirements, enable to reduce the hypervisor functionalities and complexity.
 By design, a hypervisor with a narrow set of features is less amenable to exploits than a standard one.
 Any hypervisor reduced to its core has two roles: expose functionalities, and manage a set of resources.
-Where standard hypervisors such as[CITE] accumulate features and functionalities, emulating a complete operating system, we believe that our needs, in order to provide memory isolation within a thread of execution can be stripped down to a bare minimum consisting of an execution unit and some memory.
-Our hypervisor will therefore be solely in charge of exposing a certain amount of memory resources, i.e., virtualizing memory resources.
+Where standard hypervisors such as[CITE] accumulate features and functionalities, emulating a complete operating system, we believe that our needs, in order to provide memory isolation within a thread of execution, can be stripped down to a bare minimum consisting of an execution unit and some memory.
+Our hypervisor is therefore solely in charge of exposing a certain amount of memory resources, i.e., virtualizing memory resources.
 All other functionalities are implemented within the guest, by relying on direct access to hardware features and privileged state. \\
 
-%The hypervisor has two main roles: expose functionalities and provide resource management.
-%Where standard hypervisor such as[CITE] need to emulate, interpose, or dynamically translate instructions, %virtualization hardware support enables direct execution, on the hardware, of instructions, be them privile%ged %or not.%
-%VM exits, i.e., cases where the hypervisor is forced to intervene, can further be limited, by design, by %reducing the functionalities exposed.
-
-
-
-
- 
 %Hardware support for virtualization provides direct access to essential hardware features, such as ring %protection mechanism, page tables, TLBs, from within the guest.%
 %We previously identified the need to rely on hardware in order %to enforce memory isolation within a sing%le %thread of execution.%
 %Past attempts at pro%viding this abstraction, while relying on hardware to enforce it, had to modify an existing %kernel, i.e., the ho%st.%
@@ -360,14 +369,26 @@ All other functionalities are implemented within the guest, by relying on direct
 %Well, it's getting boring isn't it.  This is the last subsection
 %before we wrap it up.
 
-\section{Adapting Dune}
-TODO:Memory management must be modified.
-Multiple address spaces must be allowed + less rigid mapping with host.
-Interposition on syscalls might be consider to limit access?
-Have to do all of that without introducing significant delays
-Would like to preserve backward compatibility with existing Dune applications.
-Once all of that is proven, we can merge back into Dune main branch.
-Easier to commit to Dune than to Linux ;) 
+\section{lwC as a Dune library}
+%TODO:Memory management must be modified.
+%Multiple address spaces must be allowed + less rigid mapping with host.
+%Interposition on syscalls might be consider to limit access?
+%Have to do all of that without introducing significant delays
+%Would like to preserve backward compatibility with existing Dune applications.
+%Once all of that is proven, we can merge back into Dune main branch.
+%Easier to commit to Dune than to Linux ;) 
+
+Dune is a system composed of a kernel module and a user library that provide applications with direct and safe access to hardware features made available by virtualization hardware support, while preserving the host OS interfaces for processes.
+It differs from standard virtual machine monitors by providing a \emph{process} rather than a \emph{machine} abstraction. 
+In the same way Docker blablabla.\\
+
+TODO:Isolaiton between host and guest relies on two mechanisms: hardware and supervisor \\
+
+The Dune kernel module is a small piece of code that can be seen as a hypervisor whose only role is to safely expose memory resources to the application.
+By its simplicity, the opportunities for bugs blablabla....\\
+
+
+
 
 \section{Future Work}
 TODO: performance evaluation.
