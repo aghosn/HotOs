@@ -154,7 +154,7 @@ More precisely, Docker containers[REF] rely on Linux LXC to provide separated na
 
 While presenting an interesting approach with many use-cases in devOps, containers suffer from the same security issues as previously discussed user level applications.
 The isolation among containers is entirely enforced by the Linux namespace mechanism, i.e., an oversized piece of software that might contain bugs and is hence less reliable than hardware based solutions.
-More importantly, the popularity of Docker-like solutions spread interest to their supporting technologies, sprouting updates and extensions, each of them potentially introducing new< security vulnerabilities.\\
+More importantly, the popularity of Docker-like solutions spread interest to their supporting technologies, sprouting updates and extensions, each of them potentially introducing new security vulnerabilities.\\
 
 
 Kernels are at the core of operating systems and are responsible for managing resources, among which the memory.
@@ -173,7 +173,7 @@ They therefore can be seen as a slightly cheaper version process abstraction.\\
 
 Light-weight contexts[REF], \emph{lwC}s for short, are implemented within the FreeBSD kernel and expose the \emph{context}, or \emph{lwC}, abstraction.
 Much like \emph{sthread}s, users have a fine-grained control over memory mappings when creating a \emph{context}.
-Entire address ranges can be shared, copied, unmapped, are made read-only.
+Entire address ranges can be shared, copied, unmapped, or made read-only.
 Unlike \emph{shtread}s, however, \emph{contexts} are orthogonal to threads, i.e., they are non-schedulable entities.
 A single thread of execution can switch between different \emph{contexts}.
 Upon a switch, the execution state is saved within the current \emph{lwC}.
@@ -246,7 +246,7 @@ Transitions from non-root to root and from root to non-root are called \emph{VM 
 
 Hardware support for virtualization provides direct access to hardware features, such as ring protection mechanism, page tables, TLBs, from within a virtualized environment, i.e., the guest.
 Such features are essential to implement and enforce efficient memory isolation within the same thread of execution, as discussed previously.
-Using hardware support for virtualization, we therefore have an environment that is, on one hand, independent from the host, i.e., the original kernel, and, at the same time, undistinguishable from it in terms of hardware tools made available. \\
+Using hardware support for virtualization, we therefore have an environment that is, on one hand, independent from the host, i.e., the original kernel, and, at the same time, indistinguishable from it in terms of hardware tools made available. \\
 
 While a certain form of hypervisor is still needed to interface the guest and host environments, we argue that hardware support for virtualization, as much as our own limited requirements, enable to reduce the hypervisor functionalities and complexity.
 By design, a hypervisor with a narrow set of features is less amenable to exploits than a standard one.
@@ -254,6 +254,25 @@ Any hypervisor reduced to its core has two roles: expose functionalities, and ma
 Where standard hypervisors such as[CITE] accumulate features and functionalities, emulating a complete operating system, we believe that our needs, in order to provide memory isolation within a thread of execution, can be stripped down to a bare minimum consisting of an execution unit and some memory.
 Our hypervisor is therefore solely in charge of exposing a certain amount of memory resources, i.e., virtualizing memory resources.
 All other functionalities are implemented within the guest, by relying on direct access to hardware features and privileged state. \\
+
+%The proper level of abstraction
+Inspired by the containers, we simplify our solution by working at a higher level of abstraction than standard VMM: the \emph{process}.
+As explained in Section[REF], containers identified the advantages of virtualizing the \emph{OS} rather than the \emph{machine}.
+We push this reasoning a step forward and place ourselves directly at the abstraction level within which we want to provide the memory isolation abstraction.
+This approach main benefit is to isolate the abstraction's implementation from the underlying kernel representation and management of processes.
+Unlike \emph{lwC}, our solution is completely decoupled from an existing kernel and does not have to interact with already defined and rigid APIs.
+We therefore have more flexibility in terms of implementation and can, along with direct access to hardware features, tune our code to perform well for our use cases.\\
+
+As was the case for existing implementations[REF], we need to enforce isolation between the guests and the underlying host.
+By design, the host OS sees our virtualized environment as one process.
+It is therefore isolated from other host processes by the host kernel itself and we need not worry about it.
+Isolation among guests, i.e., among memory units within the same thread of execution, requires to limit the capabilities exposed to guests.
+While hardware based isolation is ensured within the virtualized environment, the possibility to perform a VM exit presents a potential threat.
+In fact, our design maps several address spaces within the virtualized environment to a single address space the host OS.
+As a result, transitions to the host and system calls serviced by the host must be monitored and restricted to avoid leaking information from one guest to another. 
+We do this by limiting the functionalities available inside the guest, i.e., disable some system calls, and by validating and sanitizing arguments to syscalls passed to the host.
+Although similar, in principal, to code instrumentation and interposition techniques described previously, the overhead introduced concerns only system calls that trigger a VM exit and is negligible compared to the overall cost of the transition. \\
+
 
 %Hardware support for virtualization provides direct access to essential hardware features, such as ring %protection mechanism, page tables, TLBs, from within the guest.%
 %We previously identified the need to rely on hardware in order %to enforce memory isolation within a sing%le %thread of execution.%
