@@ -271,7 +271,7 @@ While hardware based isolation is ensured within the virtualized environment, th
 In fact, our design maps several address spaces within the virtualized environment to a single address space the host OS.
 As a result, transitions to the host and system calls serviced by the host must be monitored and restricted to avoid leaking information from one guest to another. 
 We do this by limiting the functionalities available inside the guest, i.e., disable some system calls, and by validating and sanitizing arguments to syscalls passed to the host.
-Although similar, in principal, to code instrumentation and interposition techniques described previously, the overhead introduced concerns only system calls that trigger a VM exit and is negligible compared to the overall cost of the transition. \\
+Although similar, in principal, to code instrumentation and interposition techniques described previously, the overhead introduced concerns only system calls that trigger a VM exit and is negligible compared to the overall cost of the call itself. \\
 
 
 %Hardware support for virtualization provides direct access to essential hardware features, such as ring %protection mechanism, page tables, TLBs, from within the guest.%
