@@ -410,22 +410,62 @@ Although similar, in principal, to code instrumentation and interposition techni
 
 Dune is a system composed of a kernel module and a user library that provide applications with direct and safe access to hardware features made available by virtualization hardware support, while preserving the host OS interfaces for processes.
 It differs from standard virtual machine monitors by providing a \emph{process} rather than a \emph{machine} abstraction. 
-In the same way Docker blablabla.\\
+This approach focuses on the virtualization of memory resources rather than the entire operating system or the entire machine.
+By its simplicity and the restricted set of functionalities that it provides, Dune is allegedly less amenable to security vulnerabilities than standard virtual machine monitors and their large set of features.\\
 
-TODO:Isolaiton between host and guest relies on two mechanisms: hardware and supervisor \\
+The guest Dune application has complete freedom over virtual memory management within the virtualized environment.
+Furthermore, the ring protection mechanism, page tables, and the TLBs are available within the guest by relying on the Intel VT-x extension described previously.
+The guest can therefore rely on hardware features to enforce memory isolation within a Dune application and, at the same time, does no need to interact with the host kernel.
 
-The Dune kernel module is a small piece of code that can be seen as a hypervisor whose only role is to safely expose memory resources to the application.
-By its simplicity, the opportunities for bugs blablabla....\\
+Dune further provides a centralized mechanism to capture every instruction that triggers a VM exit.
+System call arguments can therefore be sanitized, validated, and modified within the guest in a single function.
+By default, Dune mirrors the guest address space within the host such that any virtual address within the virtualized environment is a valid one inside the host.
+Upon a VM exit, system call arguments that correspond to an address are therefore passed without modification.
+By interposing on the system call pass through mechanism, we can allow several address spaces, i.e., memory units, to map to a single host address space.
+Interposition is crucial to enforce isolation between the different memory units living within the same thread of execution inside the guest.
+While seemingly cumbersome, the interposition can be rendered benign by restricting instructions that trigger VM exits and performing sanity checks to ensure that any operation passed to the host accesses only the address range corresponding to the memory mapping that triggered the exit.\\
 
+We implemented the original \emph{lwC} abstraction as a Dune library and added support for VM exit interposition.
+Our implementation provides the basic \emph{lwC} functionalities, i.e., an API to create independent memory spaces within a single Dune process.
+The library's interface allows fine-grained control over resource visibility within the child context.
+Entire memory regions can be shared, copied, unmapped or marked read-only.
+Isolation between contexts within the virtualized environment is ensured by hardware mechanisms, i.e., each context has its own memory mappings and page tables.
+In order to prevent a context from accessing another's resources via a VM exit, we interpose on system calls that require the host intervention and force every operation to fall within the current context's address range.\\
 
-
+The \emph{lwC} library is available to user applications running within the existing Dune sandbox.
+The sandbox is responsible for loading and starting the user application.
+Within the sandbox, we expose the \emph{lwC} API, implemented as a collection of system calls.
+Any call to an \emph{lwC} function is directed to the Dune system call handler within the virtualized environment.
+Our prototype provides only a subset of the original library, i.e., it allows to create contexts, switch among them, and safely destroy and free the resources allocated to a specific context.
 
 \section{Future Work}
-TODO: performance evaluation.
-Re-implement existing applications using lwc.
+The \emph{lwC} Dune library provides the basic functionalities that allow to create isolated and independent memory units within a single thread of execution.
+Our implementation mainly focused on memory management and isolation.
+In its current state, it has to be considered as a proof of concept rather than a complete solution.
+Apart from memory mappings, mechanisms to restrict access to file descriptors need to be implemented.
+In fact, the original \emph{lwC} paper provides tools to manage file table entries visibility within contexts.
+A similar mechanism needs to be added to our implementation.\\
+
+The freeBSD \emph{lwC} implementation exposes an interface to perform system call interposition between contexts.
+Upon creation, the parent context has control over functionalities made available to the newly created context.
+While undeniably interesting, we did not judge necessary to invest efforts into porting this feature to our implementation.
+As mentioned in Section[REF], Dune already provides a centralized mechanism for system call interposition.
+We therefore plan, in the near future, to provide an interface within the \emph{lwC} interface to tap into Dune mechanism to limit a context capabilities.\\
+
+Memory isolation within a single thread of execution is supposed to avoid the overhead incurred by process creation and management.
+It is therefore vital to perform micro-benchmarks and compare our implementation's performance with the cost of a standard context switch, kernel threads, and user threads.
+We plan on reproducing the original comparison performed in paper[REF].
 
 \section{Conclusion}
+We acknowledged the need for a new memory isolation abstraction accessible within a single thread of execution.
+We studied existing solutions and identified what we believed to be their limitations.
+From our observations, we came up with two major requirements that need to be satisfied in order to provide such an abstraction.
+Memory isolation within a single thread of execution needs to be provided as a system primitive, relying on hardware mechanisms to implement isolation, and decoupled from an existing kernel's internals.
+We showed that our requirements could be met using hardware support for virtualization.
+Our proof-of-concept implementation, based on Dune, is a flexible implementation of the existing \emph{lwC} design.
+Future work will enable to validate our implementation and extend its set of functionalities. 
 
+%flexibility
 \section{Acknowledgments}
 %
 %A polite author always includes acknowledgments.  Thank everyone,
