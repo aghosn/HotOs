@@ -51,30 +51,21 @@ Second Institution
 
 
 \subsection*{Abstract}
-%Memory isolation within a process as a kernel primitive, using dune.
-%Base the design on an existing solution, but port it to dune.
-%Then talk about the fact that process are units of isolation in general os
-%Thread enable to have execution, but equivalent does not exist for memory while it is actually a desired and used abstraction.
-%or maybe just say previous attempts but either maintainability, lack of tools, or performance issues,
-%and leave process etc for introduction.
 
 We believe programmers would greatly benefit from an OS abstraction for memory isolation within a process.
 We further argue that leveraging recent architecture's hardware support for virtualizaiton would, unlike previous attempts, yield a solution that is both safe and maintainable.
 Hardware support for virtualization provides direct access to hardware features, such as ring protection mechanism and page tables, required to provide such an abstraction, while providing flexibility in terms of the implementation's specifics.
-%We further argue that relying on Dune and hardware support for virtualization would, unlike previous attempts, yield a maintainable solution.
-%Dune provides flexibility, compatibility with the Linux kernel, and access to hardware features required to implement such an abstraction.
 We improve upon previous solutions by both relying on hardware mechanisms to enforce memory isolation and being completely decoupled from an existing kernel.
 
 \section{Introduction}
-%Process -> thread, nothing for memory.
-%Fork is expensive and force you to back out to higher level.
+
 General purpose kernels rely on the process abstraction to represent a unit of isolation in terms of memory, privilege, and execution.
 Processes isolate applications from each other and, more specifically, prevent one process from accessing another's memory.
 Although vital for operating systems, this abstraction requires process management, context switching, and resource accountability which, in turn, introduce non-negligible overheads at the OS-level, especially compared to the associated hardware costs. \\
 
 We identify a discrepancy between the functionalities provided by existing general purpose kernels and user needs.
 While the thread abstraction provides independent, isolated, execution units within a process, memory isolation is attainable only by going through the costly creation and management of a new process.
-In fact, the lack of a kernel primitive to isolate memory units within the same thread of execution, pushed application developers to implement their own solutions within user space. \\
+In fact, the lack of a kernel primitive to isolate memory units within the same thread of execution, pushed application developers to implement their own solutions within user space\cite{DBLP:conf/usenix/FordC08,DBLP:journals/cacm/YeeSDCMOONF10,DBLP:conf/uss/SehrMBKPSYC10}. \\
 
 Memory isolation within a single thread of execution is a generalization of the ring protection mechanism, a common technique used in general purpose kernel to isolate kernel and user spaces.
 Mode switching is a technique that allows to perform privileged operations without having to incur the cost of a context switch.
@@ -91,62 +82,35 @@ For example, in Java, meta-programming allows to access even the private fields.
 
 We believe that memory isolation within a single thread of execution must be provided as a kernel primitive.
 Furthermore, we argue that, unlike previous implementations, it is possible to provide a maintainable and flexible solution, easy to tune to special use cases, by relying on efficient virtualization and direct access to hardware features.
-We implement the existing light-weight contexts abstraction[REF] (lwC) as a Dune library, and argue about the advantages of having such a solution within Dune[REF].
-This paper is organized as follows: Section[REF] presents previous implementations that strove to provide a memory isolation abstraction, and their limitations.
-Section [REF] presents the lwC API, as exposed in our Dune implementation.
-Section[REF] presents how Dune was modified to allow the implementation of the lwC abstraction.
-Finally, Section[REF] lists future work before the conclusion in Section[REF].
+We implement the existing light-weight contexts abstraction~\cite{DBLP:conf/osdi/LittonVE0BD16}, \emph{lwC}, as a Dune~\cite{DBLP:conf/osdi/BelayBMTMK12} library, and argue about the advantages of having such a solution within Dune.
+This paper is organized as follows: Section\ref{existing} presents previous implementations that strove to provide a memory isolation abstraction, and their limitations.
+Section~\ref{leverage} presents hardware support for virtualization as a base to provide this abstraction.
+Section~\ref{lwc} presents our prototype implemented as a Dune library.
+Finally, Section~\ref{future} lists future work before the conclusion in Section~\ref{conclusion}.
 
-%Desired abstraction that is a generalization of ring protection.
-%and exists in some pls.
-%Often violated because cannot rely on the hardware features that we have access to.
-
-%A paragraph of text goes here.  Lots of text.  Plenty of interesting
-%text. \\
-%
-%More fascinating text. Features\endnote{Remember to use endnotes, not footnotes!} galore, plethora of promises.%\\
-
-\section{Shortcomings of Existing Solutions}
-%TODO:Present existing and why problematic.
-%Either sandbox, but bad because have to work at the machine abstraction, complicated + perfs.
-%NaCl with recompilation etc. and there own environment + compiler.
-%Either as part of existing kernel, maintainability issues.\\
-%Computer scientists have made several attempts at providing a memory isolation abstraction within a single thread of execution.
+\section{Shortcomings of Existing Solutions}\label{existing}
 There exists several implementations claiming to provide a memory isolation abstraction within a thread of execution.
-%We observed two distinct techniques to provide this abstraction: sandboxes that isolate different user memory regions, and kernel level implementations.
 We divide these implementations into two distinct categories: user-level applications and kernel level implementations.
 In this section, we describe general techniques used by user-level applications solutions, and explain why we believe that this abstraction has to be provided as a kernel primitive.
-%In this section, we briefly describe one sandbox solution, and explain why we believe that this abstraction has to be provided as a kernel primitive.
 We then proceed with existing kernel level implementations, and expose what we consider to be important limitations that prevent them from being a stable long-term solution.\\
 
 Virtual machines, hypervisors, and sandboxes implemented as user level applications share common techniques to provide security mechanisms that allow to isolate untrusted code execution and prevent it from harming both the underlying system and other isolated applications.
 A common security and isolation requirement in such applications is to enforce memory isolation and reduce the capabilities of running applications.
 As a result, such applications have to duplicate the kernel's functionalities in order to obtain fine-grained control over memory allocation and access, and hence intervene in the management of resources.
-On older architectures, applications such as NaCl[REF] or Vx32[REF] could rely on user access to hardware support for memory segmentation to enforce memory isolation within a thread of execution.
+On older architectures, applications such as NaCl\cite{DBLP:journals/cacm/YeeSDCMOONF10,DBLP:conf/uss/SehrMBKPSYC10} or Vx32\cite{DBLP:conf/usenix/FordC08} could rely on user access to hardware support for memory segmentation to enforce memory isolation within a thread of execution.
 With the advent of modern x86-64 architectures and more generally the progressive disappearance of hardware memory segmentation support, user applications had to use new techniques.
 User level solutions include software fault isolation, code instrumentation, instruction emulation, and binary code translation.
 More generally, all these software based solutions rely on some mixture of code instrumentation and software checks to enforce memory isolation.
-NaCl[REF], for example, was modified to replace hardware segmentation with code instrumentation.
+NaCl\cite{DBLP:conf/uss/SehrMBKPSYC10}, for example, was modified to replace hardware segmentation with code instrumentation.
 The untrusted application's code is recompiled and instrumented such that instructions that access and modify memory related registers are replaced by guarded pseudo-instructions, hence insuring that their contents are consistent throughout the execution.
 It further replaces all memory accesses and re-writes them in terms of the guarded registers, hence insuring that every memory operation falls into the proper address range and no untrusted application can access another's resources.
 NaCl's solution can be seen as a software implementation of memory segmentation.
-%A sandbox is a security mechanism that allows to isolate untrusted code execution and prevent it from harming both the underlying system and other sandboxed applications.
-%A common requirement for sandboxes is to enforce memory isolation and reduce the capabilities of running applications.
-%As a result, sandboxes often have to intervene in the management of resources.
-%They hence duplicate the kernel's functionalities in order to obtain fine-grained control over memory allocation and accesses.
-%Google's NaCl[REF] provides a sandboxed environment to execute untrusted native plugins in a Web browser.
-%In NaCl, memory isolation is ensured using code instrumentation.
-%The untrusted application's code is recompiled and instrumented such that instructions that access and modify %memory related registers are replaced by guarded pseudo instructions, hence insuring that the registers conten%t %are consistent throughout the execution.
-%All other memory accesses are re-written to be expressed using these guarded registers.
-%NaCl can therefore ensure that every memory operation falls into the proper address range and no untrusted application can access another's resources.
 NaCl authors claim that control-flow and memory integrity are insured with an average overhead of less than 7\% on x86-64.
 While these performances are remarkable for a solution based on code instrumentation, we believe that the recompilation step required to perform the binary translation, as well as the introduction of pseudo-instructions are a burden.
 Moreover, software is always subjugated to bugs, unexplored execution, and exploits.
 We can thus consider it less reliable than solutions relying on hardware features to enforce memory isolation.
 As it is the kernel's role to provide resource management and isolation, we argue that this abstraction should be provided as a collection of system calls relying on safe and efficient hardware features for memory isolation. \\
-%less reliable than hardware, and find CVS exploits or something?
 
-%Hummmm.... find the proper way to get there.
 Containers take a higher-level approach, compared to standard hypervisors, by providing an \emph{OS} rather than a \emph{machine} abstraction.
 Protected portions of the operating system are made available to containers, while allowing them to have their own abstractions for processes and other operating system components.
 The container approach relies on the possibility to execute in separated spaces that isolate them from each others, as well as from the host OS.
@@ -160,10 +124,10 @@ More importantly, the popularity of Docker-like solutions spread interest to the
 Kernels are at the core of operating systems and are responsible for managing resources, among which the memory.
 As such, they are a perfect environment to implement and expose new abstractions for memory isolation within a process.
 Not only does it fit in the kernel's role, but also allows to rely on hardware features to enforce memory isolation.
-Others[REF] before us identified the need for a new memory isolation abstraction, and the advantages of implementing it as a kernel primitive.
+Others\cite{DBLP:conf/osdi/LittonVE0BD16,DBLP:conf/nsdi/BittauMHK08} before us identified the need for a new memory isolation abstraction, and the advantages of implementing it as a kernel primitive.
 The following two examples both rely on page tables and hardware features to implement their abstractions. \\
 
-Wedge[REF] is a kernel library that introduces the \emph{sthread} abstraction.
+Wedge\cite{DBLP:conf/nsdi/BittauMHK08} is a kernel library that introduces the \emph{sthread} abstraction.
 \emph{Sthread}s are described as threads with fork-like semantics.
 More specifically, upon creation, modifiers allow a fine-grained control over resource visibility within the newly created \emph{sthread}.
 Entire memory regions can be unmapped and made unaccessible from within the \emph{sthread}.
@@ -171,7 +135,7 @@ This solution, however, does not completely decouple the memory and execution un
 \emph{Sthread}s are schedulable entities and therefore provide memory isolation at a cost that comprises \emph{sthread}s scheduling and management.
 They therefore can be seen as a slightly cheaper version process abstraction.\\
 
-Light-weight contexts[REF], \emph{lwC}s for short, are implemented within the FreeBSD kernel and expose the \emph{context}, or \emph{lwC}, abstraction.
+Light-weight contexts\cite{DBLP:conf/osdi/LittonVE0BD16}, \emph{lwC}s for short, are implemented within the FreeBSD kernel and expose the \emph{context}, or \emph{lwC}, abstraction.
 Much like \emph{sthread}s, users have a fine-grained control over memory mappings when creating a \emph{context}.
 Entire address ranges can be shared, copied, unmapped, or made read-only.
 Unlike \emph{shtread}s, however, \emph{contexts} are orthogonal to threads, i.e., they are non-schedulable entities.
@@ -189,54 +153,11 @@ From an implementation point of view, this reduces the solution's flexibility an
 For example, the \emph{lwC}s authors had to work with freeBSD's datastructures and abstraction layers for memory management.
 We argue that, in a virtualized environment with hardware support, we can implement a similar solution, with equivalent performances, and more flexibility and freedom in terms of the memory hierarchy abstractions and the actual implementation of \emph{lwC} functionalities.
 Moreover, our solution does not require to modify an existing kernel.
-%Some embedded literal typset code might 
-%look like the following :
-%
-%{\tt \small
-%\begin{verbatim}
-%int wrap_fact(ClientData clientData,
-%              Tcl_Interp *interp,
-%              int argc, char *argv[]) {
-%    int result;
-%    int arg0;
-%    if (argc != 2) {
-%        interp->result = "wrong # args";
-%        return TCL_ERROR;
-%    }
-%    arg0 = atoi(argv[1]);
-%    result = fact(arg0);
-%    sprintf(interp->result,"%d",result);
-%    return TCL_OK;
-%}
-%\end{verbatim}
-%}
-%
-%Now we're going to cite somebody.  Watch for the cite tag.
-%Here it comes~\cite{Chaum1981,Diffie1976}.  The tilde character (\~{})
-%in the source means a non-breaking space.  This way, your reference will
-%always be attached to the word that preceded it, instead of going to the
-%next line.
-%
-\section{Leveraging hardware support for virtualization}
-%Modern architectures come with hardware support for virtualization.
-%Allowing as many instructions as possible to be executed directly without VMM intervention.
-%Instead of trapping and emulating as before.
-%For example VT-x and AMD. Vt-x defines VMX root and non-root
-%non-root used for virtualized environment. The hardware handles transitions between modes
-%Hardware is responsible for automatically saving and restoring states in both. 
-%EPT mechanism
 
-%Create a virtualized environment that abstracts a process.
-%Strip down to only what we need to limit dependencies and provide portability, i.e., the solution can be reapplied to a different OS.
-%Access to hardware features such as  ring protection, page tables and TLBs allows to enforce isolaiton as we want it. Merely creating an interface, the isolation is implemented by the hardware itself.
-%Since hardware, more reliable than buggy software.
-%Want to work at the proper level of abstraction: the process. Don't want to manage processes etc.
-%With hardware virtu support, that's made possible => work within a host process. Virtu preserves the process interface and enforces isolation between host and guest. strip down to bare minimum of what's needed.
-%Shield the host from the guest.
-%TODO: really need two things: flexiblity/indep from existing kernel and access to hardware
+\section{Leveraging hardware support for virtualization}\label{leverage}
 Intel and AMD identified and answered the need for virtualization hardware support.
-The Intel solution, called VT-x, is a virtualization extension to the x86 ISA.
-AMD provides a similar extension with SVM[REF].
+The Intel solution, called VT-x\cite{DBLP:journals/computer/UhligNRSMABKLS05}, is a virtualization extension to the x86 ISA.
+AMD provides a similar extension with SVM\cite{AMD}.
 Instead of introducing traps for each instruction accessing privileged state and relying on a VMM for emulation, these extensions strive to execute as many instructions, privileged or not, directly in hardware.
 To avoid involving the VMM and hence introduce delays, the hardware maintains a shadow copy of privileged state.
 In Intel VT-x, the CPU provides two modes of operation: VMX root and VMX non-root.
@@ -255,15 +176,14 @@ Where standard hypervisors such as[CITE] accumulate features and functionalities
 Our hypervisor is therefore solely in charge of exposing a certain amount of memory resources, i.e., virtualizing memory resources.
 All other functionalities are implemented within the guest, by relying on direct access to hardware features and privileged state. \\
 
-%The proper level of abstraction
 Inspired by the containers, we simplify our solution by working at a higher level of abstraction than standard VMM: the \emph{process}.
-As explained in Section[REF], containers identified the advantages of virtualizing the \emph{OS} rather than the \emph{machine}.
+As explained in Section~\ref{existing}, containers identified the advantages of virtualizing the \emph{OS} rather than the \emph{machine}.
 We push this reasoning a step forward and place ourselves directly at the abstraction level within which we want to provide the memory isolation abstraction.
 This approach main benefit is to isolate the abstraction's implementation from the underlying kernel representation and management of processes.
 Unlike \emph{lwC}, our solution is completely decoupled from an existing kernel and does not have to interact with already defined and rigid APIs.
 We therefore have more flexibility in terms of implementation and can, along with direct access to hardware features, tune our code to perform well for our use cases.\\
 
-As was the case for existing implementations[REF], we need to enforce isolation between the guests and the underlying host.
+As was the case for existing implementations\cite{DBLP:conf/osdi/LittonVE0BD16,DBLP:conf/usenix/FordC08,DBLP:journals/cacm/YeeSDCMOONF10}, we need to enforce isolation between the guests and the underlying host.
 By design, the host OS sees our virtualized environment as one process.
 It is therefore isolated from other host processes by the host kernel itself and we need not worry about it.
 Isolation among guests, i.e., among memory units within the same thread of execution, requires to limit the capabilities exposed to guests.
@@ -273,141 +193,7 @@ As a result, transitions to the host and system calls serviced by the host must 
 We do this by limiting the functionalities available inside the guest, i.e., disable some system calls, and by validating and sanitizing arguments to syscalls passed to the host.
 Although similar, in principal, to code instrumentation and interposition techniques described previously, the overhead introduced concerns only system calls that trigger a VM exit and is negligible compared to the overall cost of the call itself. \\
 
-
-%Hardware support for virtualization provides direct access to essential hardware features, such as ring %protection mechanism, page tables, TLBs, from within the guest.%
-%We previously identified the need to rely on hardware in order %to enforce memory isolation within a sing%le %thread of execution.%
-%Past attempts at pro%viding this abstraction, while relying on hardware to enforce it, had to modify an existing %kernel, i.e., the ho%st.%
-%Hardware support for% vi%rtualization makes it possible to both have access to hardware features, and preserve %existing host proces%s i%nterfaces.%
-%The memory isolation% ab%straction %is made available within the virtualized environment, and does not require a%ny %modification to the %hos%t kernel.%
-%Performance is not a%ffected by t%he virtualization of the environment in which the new abstraction is provided.
-%A majority of the instructions are executed directly by hardware and VM exits can be reduced by design to a %strict minimum.
-
-
-%Basically what we have and why it is good.
-%VT-x == hardware support for virtualization
-%Correct level of abstraction -> we are within a process, narrower interface than standard VMM.
-%Maintainability -> no need to modify existing kernel source code, less intrusive than previous techniques why %till as much fine-grained control over resources. + more freedom in the implementation.
-%Already have sandbox, no need to implement one + code can be compiled using gcc (not a modified compiler).
-
-%Dune[REF] is a kernel module that provides applications with direct and safe access to hardware features, among %which ring protection, page tables, and TLBs.%
-%It does so while isolating the application fr%om the underlying kernel by preserving existing OS interfaces for %processes.%
-%Dune diffe%rs from existing virtual machine monitors by providing a \emph{process} rather than a \emph{machine} %abstractio%n.%
-%Interfaces% a%re therefore narrower, hence limiting the disparities between host and guest and enabling to reduce% %the cost o%f %performing VM entries and exits.%
-%As a resul%t,% we identified it as the perfect% vector to implement a memory isolation abstraction within a %process.%
-%We took %the original \emph{lwC} design and implemented it as a Dune library. \\
-%
-%Access to hardware features to enforce memory isolation, as done in \emph{lwC}, is crucial.
-%This requirement was identified in the original \emph{lwC} paper, and justifies its implementation as part of %the freeBSD kernel.%
-%Thanks to Dune, we %have safe access to hardware features and have the same tool-belt to perform resource, and %more specifically m%emory, management.%
-%Page tables, virtua%l memory mappings,% and related hardware features (registers and TLB), are made available an%d %can be relied on to% implement the \em%ph{lwC} library, just as in a regular kernel.%
-%We also expect to o%btain similar perf%ormances as in the original implementation. \%\
-%
-%%Correct level of abstraction + simplified interfaces => flexibility and easy to implement.
-%%No need to think about interaction with existing kernel data structures and call graph etc.
-%The \emph{lwC} abstraction is available within a process, and is orthogonal to threads.
-%As such, we want to limit implementation dependencies and interactions between \emph{lwC}s, processes, and %threads.%
-%Dune pla%ces us at exactly the proper abstraction level: the process.%
-%As a res%ult, we do not have to bother with process creation, management, and scheduling and can focus on \e%mph{%lwC} fun%ctionalities.%
-%Dune fur%ther isolate %the library from the underlying OS.
-%In other% words, by de%sign, the \emph{lwC} implementation is completely decoupled from the encapsulating %processes.%
-%We thus have an opaque barrier that prevents processes data-structures and \emph{lwC}s from accessing each %other.
-
-%Maintainability, completely indepedent from existing kernel. As long as dune compatible with Linux, blalba.
-
-%Sandbox already there, so can run applications that use the library in a safe environment.
-
-%\subsection{First SubSection}
-%Here's a typical figure reference.  The figure is centered at the
-%top of the column.  It's scaled.  It's explicitly placed.  You'll
-%have to tweak the numbers to get what you want.\\
-%
-%% you can also use the wonderful epsfig package...
-%\begin{figure}[t]
-%\begin{center}
-%\begin{picture}(300,150)(0,200)
-%\put(-15,-30){\special{psfile = fig1.ps hscale = 50 vscale = 50}}
-%\end{picture}\\
-%\end{center}
-%\caption{Wonderful Flowchart}
-%\end{figure}
-%
-%This text came after the figure, so we'll casually refer to Figure 1
-%as we go on our merry way.
-
-%\subsection{New Subsection}
-
-%It can get tricky typesetting Tcl and C code in LaTeX because they share
-%a lot of mystical feelings about certain magic characters.  You
-%will have to do a lot of escaping to typeset curly braces and percent
-%signs, for example, like this:
-%``The {\tt \%module} directive
-%sets the name of the initialization function.  This is optional, but is
-%recommended if building a Tcl 7.5 module.
-%Everything inside the {\tt \%\{, \%\}}
-%block is copied directly into the output. allowing the inclusion of
-%header files and additional C code." \\
-%
-%Sometimes you want to really call attention to a piece of text.  You
-%can center it in the column like this:
-%\begin{center}
-%{\tt \_1008e614\_Vector\_p}
-%\end{center}
-%and people will really notice it.\\
-%
-%\noindent
-%The noindent at the start of this paragraph makes it clear that it's
-%a continuation of the preceding text, not a new para in its own right.
-%
-%
-%Now this is an ingenious way to get a forced space.
-%{\tt Real~$*$} and {\tt double~$*$} are equivalent. 
-%
-%Now here is another way to call attention to a line of code, but instead
-%of centering it, we noindent and bold it.\\
-%
-%\noindent
-%{\bf \tt size\_t : fread ptr size nobj stream } \\
-%
-%And here we have made an indented para like a definition tag (dt)
-%in HTML.  You don't need a surrounding list macro pair.
-%\begin{itemize}
-%\item[]  {\tt fread} reads from {\tt stream} into the array {\tt ptr} at
-%most {\tt nobj} objects of size {\tt size}.   {\tt fread} returns
-%the number of objects read. 
-%\end{itemize}
-%This concludes the definitions tag.
-
-%\subsection{How to Build Your Paper}
-%
-%You have to run {\tt latex} once to prepare your references for
-%munging.  Then run {\tt bibtex} to build your bibliography metadata.
-%Then run {\tt latex} twice to ensure all references have been resolved.
-%If your source file is called {\tt usenixTemplate.tex} and your {\tt
-%  bibtex} file is called {\tt usenixTemplate.bib}, here's what you do:
-%{\tt \small
-%\begin{verbatim}
-%latex usenixTemplate
-%bibtex usenixTemplate
-%latex usenixTemplate
-%latex usenixTemplate
-%\end{verbatim}
-%}
-%
-%
-%\subsection{Last SubSection}
-%
-%Well, it's getting boring isn't it.  This is the last subsection
-%before we wrap it up.
-
-\section{lwC as a Dune library}
-%TODO:Memory management must be modified.
-%Multiple address spaces must be allowed + less rigid mapping with host.
-%Interposition on syscalls might be consider to limit access?
-%Have to do all of that without introducing significant delays
-%Would like to preserve backward compatibility with existing Dune applications.
-%Once all of that is proven, we can merge back into Dune main branch.
-%Easier to commit to Dune than to Linux ;) 
-
+\section{lwC as a Dune library}\label{lwc}
 Dune is a system composed of a kernel module and a user library that provide applications with direct and safe access to hardware features made available by virtualization hardware support, while preserving the host OS interfaces for processes.
 It differs from standard virtual machine monitors by providing a \emph{process} rather than a \emph{machine} abstraction. 
 This approach focuses on the virtualization of memory resources rather than the entire operating system or the entire machine.
@@ -438,7 +224,7 @@ Within the sandbox, we expose the \emph{lwC} API, implemented as a collection of
 Any call to an \emph{lwC} function is directed to the Dune system call handler within the virtualized environment.
 Our prototype provides only a subset of the original library, i.e., it allows to create contexts, switch among them, and safely destroy and free the resources allocated to a specific context.
 
-\section{Future Work}
+\section{Future Work}\label{future}
 The \emph{lwC} Dune library provides the basic functionalities that allow to create isolated and independent memory units within a single thread of execution.
 Our implementation mainly focused on memory management and isolation.
 In its current state, it has to be considered as a proof of concept rather than a complete solution.
@@ -449,44 +235,28 @@ A similar mechanism needs to be added to our implementation.\\
 The freeBSD \emph{lwC} implementation exposes an interface to perform system call interposition between contexts.
 Upon creation, the parent context has control over functionalities made available to the newly created context.
 While undeniably interesting, we did not judge necessary to invest efforts into porting this feature to our implementation.
-As mentioned in Section[REF], Dune already provides a centralized mechanism for system call interposition.
+As mentioned in Section~\ref{lwc}, Dune already provides a centralized mechanism for system call interposition.
 We therefore plan, in the near future, to provide an interface within the \emph{lwC} interface to tap into Dune mechanism to limit a context capabilities.\\
 
 Memory isolation within a single thread of execution is supposed to avoid the overhead incurred by process creation and management.
 It is therefore vital to perform micro-benchmarks and compare our implementation's performance with the cost of a standard context switch, kernel threads, and user threads.
-We plan on reproducing the original comparison performed in paper[REF].
+We plan on reproducing the original comparison performed in paper\cite{DBLP:conf/osdi/LittonVE0BD16}.
 
-\section{Conclusion}
+\section{Conclusion}\label{conclusion}
 We acknowledged the need for a new memory isolation abstraction accessible within a single thread of execution.
 We studied existing solutions and identified what we believed to be their limitations.
 From our observations, we came up with two major requirements that need to be satisfied in order to provide such an abstraction.
 Memory isolation within a single thread of execution needs to be provided as a system primitive, relying on hardware mechanisms to implement isolation, and decoupled from an existing kernel's internals.
 We showed that our requirements could be met using hardware support for virtualization.
 Our proof-of-concept implementation, based on Dune, is a flexible implementation of the existing \emph{lwC} design.
-Future work will enable to validate our implementation and extend its set of functionalities. 
+Future work will enable to validate our implementation and extend its set of functionalities.
 
-%flexibility
 \section{Acknowledgments}
 %
 %A polite author always includes acknowledgments.  Thank everyone,
 %especially those who funded the work. 
 %
-%\section{Availability}
-%
-%It's great when this section says that MyWonderfulApp is free software, 
-%available via anonymous FTP from
-%
-%\begin{center}
-%{\tt ftp.site.dom/pub/myname/Wonderful}\\
-%\end{center}
-%
-%Also, it's even greater when you can write that information is also 
-%available on the Wonderful homepage at 
-%
-%\begin{center}
-%{\tt http://www.site.dom/\~{}myname/SWIG}
-%\end{center}
-%
+
 %Now we get serious and fill in those references.  Remember you will
 %have to run latex twice on the document in order to resolve those
 %cite tags you met earlier.  This is where they get resolved.
@@ -494,7 +264,7 @@ Future work will enable to validate our implementation and extend its set of fun
 %After the bibliography you are DONE.
 %
 {\footnotesize \bibliographystyle{acm}
-\bibliography{../common/bibliography}}
+\bibliography{bibliography.bib}}
 
 
 \theendnotes
